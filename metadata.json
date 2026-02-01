@@ -1,0 +1,9 @@
+{
+  "name": "Echo - Live AI Assistant",
+  "description": "A real-time AI companion that sees what you see and guides you through your day using the Gemini Live API.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "display-capture"
+  ]
+}
