@@ -108,9 +108,13 @@ const LiveSession: React.FC<LiveSessionProps> = ({
     try {
       setConnectionState(ConnectionState.CONNECTING);
       
-      // Safe API Key Retrieval: Checks Window Polyfill first, then Process Env, then Hardcoded Fallback
-      const apiKey = (window as any).process?.env?.API_KEY || process.env.API_KEY || "AIzaSyDxFv4JbzAo-x_dBFSIFPwTsriwXlpoU_k";
-      if (!apiKey) throw new Error("API Key not found");
+      // Access API Key from Environment Variables
+      // We check standard process.env (Webpack/Node) and import.meta.env (Vite)
+      const apiKey = process.env.API_KEY || (import.meta as any).env?.VITE_API_KEY;
+      
+      if (!apiKey) {
+        throw new Error("API Key not found. Please check your environment variables.");
+      }
 
       const ai = new GoogleGenAI({ apiKey });
       
