@@ -330,7 +330,7 @@ ${manifestoContext}
                                 media: { mimeType: 'image/jpeg', data: initialFrame }
                              });
                         }
-                        s.sendRealtimeInput({ content: { parts: [{ text: "Start your intro." }] } });
+                        (s as any).sendRealtimeInput({ content: { parts: [{ text: "Start your intro." }] } });
                     });
                 },
                 onmessage: async (msg: LiveServerMessage) => {
