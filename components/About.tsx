@@ -2,7 +2,7 @@ import React from 'react';
 
 const About: React.FC = () => {
     return (
-        <div className="flex flex-col h-full bg-google-bg overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 font-sans">
+        <div className="flex flex-col h-full bg-google-bg overflow-hidden animate-slide-in-up font-sans">
             {/* Header */}
             <div className="px-6 py-5 border-b border-white/5 bg-google-surface/30 backdrop-blur-md flex justify-between items-center shrink-0">
                 <div>

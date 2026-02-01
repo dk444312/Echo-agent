@@ -151,7 +151,7 @@ VISUAL DASHBOARD DESCRIPTION (You are "seeing" this screen):
   }
 
   return (
-    <div className="flex flex-col md:flex-row h-[100dvh] w-full bg-google-bg overflow-hidden text-sm md:text-base font-sans animate-in fade-in duration-700">
+    <div className="flex flex-col md:flex-row h-[100dvh] w-full bg-google-bg overflow-hidden text-sm md:text-base font-sans animate-fade-in">
       
       {/* Sidebar / Bottom Nav */}
       <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />

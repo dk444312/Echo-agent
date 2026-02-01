@@ -4,6 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Echo - Live AI Assistant</title>
+    <!-- Fix 404 Favicon Error with a transparent placeholder -->
+    <link rel="icon" href="data:;base64,iVBORw0KGgo=">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -27,6 +29,18 @@
             animation: {
               'spin-slow': 'spin 3s linear infinite',
               'pulse-fast': 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              'fade-in': 'fadeIn 0.7s ease-out forwards',
+              'slide-in-up': 'slideInUp 0.5s ease-out forwards',
+            },
+            keyframes: {
+              fadeIn: {
+                '0%': { opacity: '0' },
+                '100%': { opacity: '1' },
+              },
+              slideInUp: {
+                '0%': { opacity: '0', transform: 'translateY(10px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
+              }
             }
           }
         }
@@ -76,5 +90,7 @@
 </head>
   <body>
     <div id="root"></div>
+    <!-- Entry point for the React application -->
+    <script type="module" src="/index.tsx"></script>
   </body>
 </html>

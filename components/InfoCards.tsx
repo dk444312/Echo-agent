@@ -365,7 +365,7 @@ ${manifestoContext}
 
     if (activeTab === 'analytics') {
       return (
-        <div className="flex flex-col h-full p-6 animate-in fade-in duration-300 relative overflow-y-auto custom-scrollbar">
+        <div className="flex flex-col h-full p-6 animate-fade-in relative overflow-y-auto custom-scrollbar">
            {/* Header */}
            <div className="flex flex-col md:flex-row items-center justify-between mb-8 gap-4">
               <div className="flex flex-col items-center md:items-start">
@@ -412,7 +412,7 @@ ${manifestoContext}
 
                {/* Grid Wrapper - Hidden on Mobile unless expanded */}
                <div className={`grid grid-cols-1 lg:grid-cols-2 gap-6 transition-all duration-300 ease-in-out 
-                   ${!isMobileExpanded ? 'hidden md:grid' : 'grid animate-in fade-in slide-in-from-top-4'}
+                   ${!isMobileExpanded ? 'hidden md:grid' : 'grid animate-fade-in'}
                `}>
                     
                    {/* Col 1: Position Status (No Specific Results) */}
