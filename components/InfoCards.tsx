@@ -256,7 +256,8 @@ const InfoCards: React.FC<InfoCardsProps> = ({ cards, activeTab, electionContext
       }
 
       try {
-          const apiKey = process.env.API_KEY;
+          // Safe API Key Retrieval: Checks Window Polyfill first, then Process Env, then Hardcoded Fallback
+          const apiKey = (window as any).process?.env?.API_KEY || process.env.API_KEY || "AIzaSyDxFv4JbzAo-x_dBFSIFPwTsriwXlpoU_k";
           if (!apiKey) throw new Error("No API Key");
 
           setIsAtlasActive(true);
