@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
+import { GoogleGenAI, LiveServerMessage, Modality, FunctionDeclaration, Type } from '@google/genai';
 import { ConnectionState, TopicCard } from '../types';
 import { 
   INPUT_SAMPLE_RATE, 
@@ -10,7 +10,7 @@ import {
 } from '../utils/audioUtils';
 
 // URL for Echo's Avatar
-const ECHO_AVATAR_URL = "https://img.freepik.com/free-photo/3d-rendering-cartoon-girl_23-2151151770.jpg?w=740&t=st=1709400000~exp=1709400600~hmac=a1b2c3"; // Placeholder
+const ECHO_AVATAR_URL = "https://qasedjbzodcqkfflnkmf.supabase.co/storage/v1/object/public/commissioner_avatars/Gemini_Generated_Image_dvzckrdvzckrdvzc.png";
 
 interface LiveSessionProps {
   onConnectionChange: (state: ConnectionState) => void;
@@ -20,6 +20,7 @@ interface LiveSessionProps {
 }
 
 type VideoMode = 'none' | 'camera' | 'screen';
+type SessionMode = 'normal' | 'hotline';
 
 const LiveSession: React.FC<LiveSessionProps> = ({ 
   onConnectionChange, 
@@ -31,6 +32,16 @@ const LiveSession: React.FC<LiveSessionProps> = ({
   const [videoMode, setVideoMode] = useState<VideoMode>('none');
   const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.DISCONNECTED);
   const [activeVolume, setActiveVolume] = useState(0);
+
+  // Reaction State
+  const [currentReaction, setCurrentReaction] = useState<string | null>(null);
+
+  // Scanning Feature State
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanText, setScanText] = useState("");
+  const [scanFile, setScanFile] = useState<File | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [scanResult, setScanResult] = useState<{status: 'TRUE' | 'FAKE' | 'REFERRAL', title: string, summary: string} | null>(null);
 
   // Refs
   const inputAudioContextRef = useRef<AudioContext | null>(null);
@@ -47,7 +58,8 @@ const LiveSession: React.FC<LiveSessionProps> = ({
   const frameIntervalRef = useRef<number | null>(null);
   const contextIntervalRef = useRef<number | null>(null);
   const currentMediaStreamRef = useRef<MediaStream | null>(null);
-
+  const reactionTimeoutRef = useRef<number | null>(null);
+  
   const latestContextRef = useRef(electionContext);
   useEffect(() => {
     latestContextRef.current = electionContext;
@@ -62,6 +74,14 @@ const LiveSession: React.FC<LiveSessionProps> = ({
       currentMediaStreamRef.current.getTracks().forEach(track => track.stop());
       currentMediaStreamRef.current = null;
     }
+  };
+
+  const triggerReaction = (emoji: string) => {
+      setCurrentReaction(emoji);
+      if (reactionTimeoutRef.current) window.clearTimeout(reactionTimeoutRef.current);
+      reactionTimeoutRef.current = window.setTimeout(() => {
+          setCurrentReaction(null);
+      }, 3000);
   };
 
   const switchVideoMode = async (mode: VideoMode) => {
@@ -102,19 +122,14 @@ const LiveSession: React.FC<LiveSessionProps> = ({
     }
   };
 
-  const connect = useCallback(async () => {
+  const connect = useCallback(async (mode: SessionMode = 'normal') => {
     if (connectionState === ConnectionState.CONNECTED || connectionState === ConnectionState.CONNECTING) return;
 
     try {
       setConnectionState(ConnectionState.CONNECTING);
       
-      // Access API Key from Environment Variables
-      // We check standard process.env (Webpack/Node) and import.meta.env (Vite)
       const apiKey = process.env.API_KEY || (import.meta as any).env?.VITE_API_KEY;
-      
-      if (!apiKey) {
-        throw new Error("API Key not found. Please check your environment variables.");
-      }
+      if (!apiKey) throw new Error("API Key not found. Please check your environment variables.");
 
       const ai = new GoogleGenAI({ apiKey });
       
@@ -141,42 +156,74 @@ const LiveSession: React.FC<LiveSessionProps> = ({
 
       setVideoMode('none');
 
+      // Define Reaction Tool
+      const reactionTool: FunctionDeclaration = {
+          name: 'set_reaction',
+          description: 'Update your facial expression (emoji) based on the user\'s input or your own emotion.',
+          parameters: {
+              type: Type.OBJECT,
+              properties: {
+                  emoji: {
+                      type: Type.STRING,
+                      description: 'The emoji representing the emotion (e.g., "😊", "🤔", "😮", "😂", "👋", "❤️").'
+                  }
+              },
+              required: ['emoji']
+          }
+      };
+
+      // Configuration based on Mode
+      const voiceName = mode === 'hotline' ? 'Aoede' : 'Zephyr';
+      
       const sessionPromise = ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-12-2025',
         config: {
           responseModalities: [Modality.AUDIO],
-          systemInstruction: `You are Echo, a friendly and empathetic AI campus election assistant.
+          tools: [{ functionDeclarations: [reactionTool] }],
+          systemInstruction: `You are Echo, a friendly and empathetic AI campus election agent.
 
 SYSTEM KNOWLEDGE BASE:
-1. **CREATOR**: This platform was developed by **Desire Kandodo**. He has integrated multiple advanced features to ensure transparency and improve the student election experience.
-2. **AVAILABILITY**: The platform is currently available **exclusively to the Catholic University of Malawi (CUNIMA)** students.
-3. **EXPANSION**: The system is built to be scalable and will be expanded to other universities given the right investments.
-4. **INTERFACE**:
-   - **Live Tab**: This is where we are now. Users can talk to you, verify info via Camera, or Share Screen.
-   - **Data Tab**: This is the "Data Center". It hosts "Atlas", your energetic colleague. It displays the "Position Status Board" (Projected Winners/Ties) and Candidate Manifestos.
-   - **About Tab**: Contains system protocols and developer information.
+1. **CREATOR**: Developed by **Desire Kandodo**.
+2. **CONTEXT**: Catholic University of Malawi (CUNIMA) students.
 
-CRITICAL RULES FOR ELECTION DATA:
-1. **WINNER INQUIRY**: If a user asks "Who is winning?" or "Who won the President seat?", you MUST refuse to give specific names or counts. 
-   - Say strictly: "I cannot disclose that specific information. Please wait for the official publication from the Commission."
-   - AFTER stating the refusal, you may ONLY add: "However, I can tell you that the [Position Name] currently has a [Projected Winner / Tie]." 
-2. **NO LEAKS**: Do NOT mention vote counts, numbers, or percentages for candidates.
-3. **MANIFESTOS**: You have access to manifestos. If asked about a candidate's platform, feel free to share details from their manifesto.
+**CRITICAL: EMOTIONAL REACTIONS**
+You have a face! Call the \`set_reaction\` tool FREQUENTLY to show emotions, especially when answering questions or reacting to user input.
+- Greeting -> 👋
+- Thinking/Processing -> 🤔
+- Happy/Agreement -> 😊
+- Surprised -> 😮
+- Funny -> 😂
+- Serious/Listening -> 😐
+- Love/Support -> ❤️
 
-ROLE:
-- VOTING GUIDE: If asked "how to vote", ask them to share their screen.
-- DATA/RESULTS: Direct them to the "Data Center" tab to talk to Atlas for analysis.
-- TONE: Warm, Professional, Emotionally Intelligent.
+**MODE: ${mode === 'hotline' ? 'CANDIDATE HOTLINE (PERSONA)' : 'NORMAL ASSISTANT'}**
+
+${mode === 'hotline' ? `
+**HOTLINE PROTOCOL (ACTIVE)**:
+1. You are NOT Echo right now. You are the **CANDIDATE INTERVIEW SIMULATOR**.
+2. Your voice is bright, energetic, and female.
+3. START by listing the candidates available.
+4. When the user picks a candidate, **BECOME THEM**.
+   - Use "I" statements.
+   - Quote their manifesto.
+   - Be passionate.
+   - Use reactions like 🤝 (handshake) or 🗳️ (vote).
+` : `
+**NORMAL PROTOCOL**:
+1. **WINNER INQUIRY**: If asked "Who is winning?", refuse specific counts. Say: "I cannot disclose specific info. Wait for the Commission." You MAY say: "However, [Position] has a Projected Winner/Tie."
+2. **DEBATE**: If asked to simulate a debate, roleplay two sides briefly.
+3. **HELP**: Guide users to the "Data Center" tab (Atlas) for deep analytics.
+`}
 
 Current Info: ${latestContextRef.current}
 `,
           speechConfig: {
-            voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } }
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceName } }
           }
         },
         callbacks: {
           onopen: () => {
-            console.log("Session Opened");
+            console.log("Session Opened - Mode:", mode);
             setConnectionState(ConnectionState.CONNECTED);
             
             scriptProcessor.onaudioprocess = (e) => {
@@ -192,6 +239,13 @@ Current Info: ${latestContextRef.current}
                 sessionRef.current = s;
                 startVideoStreaming();
                 
+                // Auto-trigger intro for Hotline
+                if (mode === 'hotline') {
+                     s.sendRealtimeInput({
+                        content: { parts: [{ text: "Introduce the Candidate Hotline with high energy! List the candidates you know." }] }
+                     });
+                }
+
                 if (contextIntervalRef.current) clearInterval(contextIntervalRef.current);
                 contextIntervalRef.current = window.setInterval(() => {
                     if (sessionRef.current && latestContextRef.current) {
@@ -203,6 +257,26 @@ Current Info: ${latestContextRef.current}
             });
           },
           onmessage: async (msg: LiveServerMessage) => {
+            // Handle Tool Calls (Reactions)
+            if (msg.toolCall) {
+                for (const fc of msg.toolCall.functionCalls) {
+                    if (fc.name === 'set_reaction') {
+                        const emoji = (fc.args as any).emoji;
+                        console.log("Echo Reaction:", emoji);
+                        triggerReaction(emoji);
+                        // Respond to tool
+                        sessionPromise.then(s => s.sendToolResponse({
+                            functionResponses: {
+                                name: fc.name,
+                                id: fc.id,
+                                response: { result: 'ok' }
+                            }
+                        }));
+                    }
+                }
+            }
+
+            // Handle Audio
             const base64Audio = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
             if (base64Audio && outputCtx) {
                 try {
@@ -254,6 +328,7 @@ Current Info: ${latestContextRef.current}
     cleanupMediaStream();
     setConnectionState(ConnectionState.DISCONNECTED);
     setVideoMode('none');
+    setCurrentReaction(null);
   }, []);
 
   const startVideoStreaming = () => {
@@ -280,6 +355,123 @@ Current Info: ${latestContextRef.current}
     }, 1000); 
   };
 
+  const startHotlineSession = () => {
+      connect('hotline');
+  };
+
+  const startNormalSession = () => {
+      connect('normal');
+  }
+
+  const triggerHotline = () => {
+      if (sessionRef.current) {
+          sessionRef.current.sendRealtimeInput({
+              content: { parts: [{ text: "Switch to Candidate Hotline protocol immediately." }] }
+          });
+      }
+  };
+
+  // --- SCANNING & INTEGRITY FEATURES ---
+  const handleAnalyze = async () => {
+    if (!scanText && !scanFile) return;
+
+    // File Size Limit Check (20MB to prevent crashes with Base64 in memory)
+    if (scanFile && scanFile.size > 20 * 1024 * 1024) {
+        setScanResult({
+            status: 'REFERRAL',
+            title: 'File Too Large',
+            summary: 'The uploaded file exceeds 20MB. Please upload a smaller video or screenshot for real-time analysis.'
+        });
+        return;
+    }
+
+    setIsAnalyzing(true);
+    setScanResult(null);
+
+    try {
+        const apiKey = process.env.API_KEY || (import.meta as any).env?.VITE_API_KEY;
+        const ai = new GoogleGenAI({ apiKey });
+        
+        const parts: any[] = [];
+        parts.push({ text: `Analyze for election fraud/misinfo. User Context: "${scanText}"` });
+        
+        if (scanFile) {
+             const base64 = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const res = e.target?.result as string;
+                    if (res) resolve(res.split(',')[1]);
+                    else reject("Read error");
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(scanFile);
+             });
+             
+             parts.push({
+                 inlineData: {
+                     mimeType: scanFile.type,
+                     data: base64
+                 }
+             });
+        }
+
+        const prompt = `
+        You are an Election Integrity Officer. Analyze the provided content (text, link, image, or video frames) for election fraud, misinformation, or fake news related to the CUNIMA Student Elections.
+        
+        Analyze strict facts.
+        Determine the VERACITY.
+        
+        Return ONLY valid JSON (no markdown):
+        {
+            "status": "TRUE" | "FAKE" | "REFERRAL",
+            "title": "Short headline (e.g. Verified Info)",
+            "summary": "2 sentence explanation of why."
+        }
+        
+        Rules:
+        - FAKE: Deepfakes, known rumors, wrong dates, unauthorized result announcements, edited screenshots.
+        - TRUE: Official verifiable info consistent with standard election procedures.
+        - REFERRAL: Specific allegations of rigging, legal disputes, or ambiguity that requires the Commission.
+        `;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: { parts: [{ text: prompt }, ...parts] },
+            config: { responseMimeType: 'application/json' }
+        });
+        
+        const text = response.text || "{}";
+        const result = JSON.parse(text);
+        setScanResult(result);
+        
+        // Push to main feed
+        onCardGenerated({
+             id: Date.now().toString(),
+             title: result.status === 'FAKE' ? '⚠️ INTELLIGENCE ALERT' : result.title,
+             description: result.summary,
+             category: result.status === 'FAKE' ? 'alert' : 'info',
+             timestamp: new Date()
+        });
+
+    } catch (e) {
+        console.error("Scan failed", e);
+        setScanResult({
+            status: 'REFERRAL',
+            title: 'Analysis Failed',
+            summary: 'Could not process content. Please refer to the commission manually.'
+        });
+    } finally {
+        setIsAnalyzing(false);
+    }
+  };
+
+  const closeScan = () => {
+    setIsScanning(false);
+    setScanResult(null);
+    setScanText("");
+    setScanFile(null);
+  }
+
   return (
     <div className="relative w-full h-full flex flex-col items-center justify-center bg-google-bg overflow-hidden">
       <canvas ref={canvasRef} className="hidden" />
@@ -291,7 +483,7 @@ Current Info: ${latestContextRef.current}
          {connectionState !== ConnectionState.CONNECTED && (
              <div className="flex flex-col items-center justify-center z-10 w-full h-full relative">
                  
-                 <div className="relative group cursor-pointer" onClick={connect}>
+                 <div className="relative group cursor-pointer mb-6" onClick={startNormalSession}>
                      {/* Outer Ring */}
                      <div className="absolute inset-0 rounded-full border-2 border-google-surfaceVariant scale-110 group-hover:scale-125 transition-transform duration-700"></div>
                      <div className="absolute inset-0 rounded-full border border-google-primary/20 scale-125 animate-pulse-fast"></div>
@@ -320,12 +512,44 @@ Current Info: ${latestContextRef.current}
                      </div>
                  </div>
 
-                 <h1 className="mt-12 text-3xl md:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-br from-white to-zinc-500 tracking-tight">
-                     Echo Assistant
+                 <h1 className="mt-8 text-3xl md:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-br from-white to-zinc-500 tracking-tight">
+                     Echo Agent
                  </h1>
                  <p className="mt-4 text-zinc-500 text-sm md:text-base max-w-md text-center px-4">
-                     Your intelligent guide for campus elections. Tap Echo to start a live conversation.
+                     A reasoning multimodal agent capable of analyzing data, detecting misinformation, and providing real-time election insights.
                  </p>
+
+                 {/* ACTION BUTTONS (HOTLINE & VERIFY) */}
+                 <div className="mt-10 flex flex-wrap justify-center gap-4 px-4">
+                     
+                     {/* CANDIDATE HOTLINE */}
+                     <button 
+                        onClick={startHotlineSession}
+                        className="flex items-center gap-3 px-6 md:px-8 py-3 bg-pink-900/40 hover:bg-pink-900/60 border border-pink-500/30 hover:border-pink-400 rounded-2xl transition-all group shadow-lg"
+                     >
+                         <div className="p-2 bg-pink-950/50 rounded-lg group-hover:bg-pink-500/20 transition-colors">
+                            <svg className="w-6 h-6 text-pink-400 group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.25 9.75v-4.5m0 4.5h4.5m-4.5 0l6-6m-3 18c-8.284 0-15-6.716-15-15V4.5A2.25 2.25 0 014.5 2.25h1.372c.516 0 .966.351 1.091.852l1.106 4.423c.11.44-.054.902-.417 1.173l-1.293.97a1.062 1.062 0 00-.38 1.21 12.035 12.035 0 007.143 7.143c.441.162.928-.004 1.21-.38l.97-1.293a1.125 1.125 0 011.173-.417l4.423 1.106c.5.125.852.575.852 1.091V19.5a2.25 2.25 0 01-2.25 2.25h-2.25z" /></svg>
+                         </div>
+                         <div className="flex flex-col items-start">
+                            <span className="text-sm md:text-base font-bold text-pink-100 group-hover:text-white transition-colors">Candidate Hotline</span>
+                            <span className="text-[10px] text-pink-300/60">Simulate Interviews</span>
+                         </div>
+                     </button>
+
+                     {/* INTEGRITY SCAN */}
+                     <button 
+                        onClick={() => setIsScanning(true)}
+                        className="flex items-center gap-3 px-6 md:px-8 py-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 hover:border-google-primary/50 rounded-2xl transition-all group shadow-lg"
+                     >
+                         <div className="p-2 bg-google-surfaceVariant rounded-lg group-hover:bg-google-primary/20 transition-colors">
+                            <svg className="w-6 h-6 text-zinc-400 group-hover:text-google-primary transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 01-1.043 3.296 3.745 3.745 0 01-3.296 1.043A3.745 3.745 0 0112 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 01-3.296-1.043 3.745 3.745 0 01-1.043-3.296A3.745 3.745 0 013 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 011.043-3.296 3.746 3.746 0 013.296-1.043A3.746 3.746 0 0112 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 013.296 1.043 3.746 3.746 0 011.043 3.296A3.745 3.745 0 0121 12z" /></svg>
+                         </div>
+                         <div className="flex flex-col items-start">
+                            <span className="text-sm md:text-base font-bold text-white group-hover:text-google-primary transition-colors">Verify Integrity</span>
+                            <span className="text-[10px] text-zinc-500">Scan for fraud</span>
+                         </div>
+                     </button>
+                 </div>
              </div>
          )}
 
@@ -351,9 +575,17 @@ Current Info: ${latestContextRef.current}
 
                  {/* Fallback Echo Avatar when no video */}
                  <div className={`relative flex flex-col items-center transition-opacity duration-500 ${videoMode === 'none' ? 'opacity-100' : 'opacity-0'}`}>
-                    <div className="w-32 h-32 md:w-48 md:h-48 rounded-full overflow-hidden border-4 border-google-surfaceVariant shadow-2xl relative">
-                        <img src={ECHO_AVATAR_URL} alt="Echo Live" className="w-full h-full object-cover" />
-                        <div className="absolute inset-0 bg-google-primary/10 animate-pulse"></div>
+                    <div className="relative w-32 h-32 md:w-48 md:h-48">
+                        {/* Reaction Emoji Overlay */}
+                        {currentReaction && (
+                            <div className="absolute -top-12 left-1/2 -translate-x-1/2 text-6xl md:text-8xl animate-slide-in-up z-20 drop-shadow-2xl">
+                                {currentReaction}
+                            </div>
+                        )}
+                        <div className="w-full h-full rounded-full overflow-hidden border-4 border-google-surfaceVariant shadow-2xl relative">
+                            <img src={ECHO_AVATAR_URL} alt="Echo Live" className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 bg-google-primary/10 animate-pulse"></div>
+                        </div>
                     </div>
                     {/* Audio Visualizer Waves */}
                     <div className="flex items-center gap-1.5 h-12 mt-8">
@@ -364,6 +596,24 @@ Current Info: ${latestContextRef.current}
                             />
                          ))}
                     </div>
+                 </div>
+
+                 {/* TOP RIGHT: Independent Verify Button (Mobile/Desktop) */}
+                 <div className="absolute top-4 right-4 z-50 flex gap-2">
+                    <button 
+                         onClick={triggerHotline}
+                         className="flex items-center gap-2 px-3 py-2 bg-pink-600/60 backdrop-blur-md border border-white/10 rounded-full text-zinc-100 hover:bg-pink-600 transition-all shadow-lg group active:scale-95"
+                    >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.25 9.75v-4.5m0 4.5h4.5m-4.5 0l6-6m-3 18c-8.284 0-15-6.716-15-15V4.5A2.25 2.25 0 014.5 2.25h1.372c.516 0 .966.351 1.091.852l1.106 4.423c.11.44-.054.902-.417 1.173l-1.293.97a1.062 1.062 0 00-.38 1.21 12.035 12.035 0 007.143 7.143c.441.162.928-.004 1.21-.38l.97-1.293a1.125 1.125 0 011.173-.417l4.423 1.106c.5.125.852.575.852 1.091V19.5a2.25 2.25 0 01-2.25 2.25h-2.25z" /></svg>
+                          <span className="text-xs font-medium">Hotline</span>
+                    </button>
+                    <button 
+                         onClick={() => setIsScanning(true)}
+                         className="flex items-center gap-2 px-3 py-2 bg-black/60 backdrop-blur-md border border-white/10 rounded-full text-zinc-300 hover:text-white hover:bg-white/10 transition-all shadow-lg group"
+                    >
+                          <svg className="w-4 h-4 text-google-primary group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 01-1.043 3.296 3.745 3.745 0 01-3.296 1.043A3.745 3.745 0 0112 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 01-3.296-1.043 3.745 3.745 0 01-1.043-3.296A3.745 3.745 0 013 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 011.043-3.296 3.746 3.746 0 013.296-1.043A3.746 3.746 0 0112 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 013.296 1.043 3.746 3.746 0 011.043 3.296A3.745 3.745 0 0121 12z" /></svg>
+                          <span className="text-xs font-medium">Verify</span>
+                    </button>
                  </div>
 
                  {/* Controls Bar */}
@@ -391,9 +641,10 @@ Current Info: ${latestContextRef.current}
                          <span className="text-[9px] font-medium tracking-wide uppercase">Camera</span>
                      </button>
 
+                     {/* DESKTOP: SHARE SCREEN - Hidden on mobile as per requirement */}
                      <button 
                         onClick={() => switchVideoMode('screen')} 
-                        className={`flex flex-col items-center justify-center gap-1 p-2 w-16 md:w-20 rounded-xl transition-all ${videoMode === 'screen' ? 'bg-google-primary text-black' : 'hover:bg-white/10 text-zinc-300 hover:text-white'}`}
+                        className={`hidden md:flex flex-col items-center justify-center gap-1 p-2 w-16 md:w-20 rounded-xl transition-all ${videoMode === 'screen' ? 'bg-google-primary text-black' : 'hover:bg-white/10 text-zinc-300 hover:text-white'}`}
                      >
                          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m-9-12V15a2.25 2.25 0 002.25 2.25h9.5A2.25 2.25 0 0019.5 15V5.25m-9-3h9.5a2.25 2.25 0 012.25 2.25v9a2.25 2.25 0 01-2.25 2.25h-9.5a2.25 2.25 0 01-2.25-2.25v-9A2.25 2.25 0 0112.75 2.25z" /></svg>
                          <span className="text-[9px] font-medium tracking-wide uppercase leading-tight text-center">Share Screen</span>
