@@ -20,7 +20,6 @@ interface LiveSessionProps {
 }
 
 type VideoMode = 'none' | 'camera' | 'screen';
-type SessionMode = 'normal' | 'hotline';
 
 const LiveSession: React.FC<LiveSessionProps> = ({ 
   onConnectionChange, 
@@ -122,7 +121,7 @@ const LiveSession: React.FC<LiveSessionProps> = ({
     }
   };
 
-  const connect = useCallback(async (mode: SessionMode = 'normal') => {
+  const connect = useCallback(async () => {
     if (connectionState === ConnectionState.CONNECTED || connectionState === ConnectionState.CONNECTING) return;
 
     try {
@@ -172,9 +171,6 @@ const LiveSession: React.FC<LiveSessionProps> = ({
           }
       };
 
-      // Configuration based on Mode
-      const voiceName = mode === 'hotline' ? 'Aoede' : 'Zephyr';
-      
       const sessionPromise = ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-12-2025',
         config: {
@@ -196,34 +192,20 @@ You have a face! Call the \`set_reaction\` tool FREQUENTLY to show emotions, esp
 - Serious/Listening -> 😐
 - Love/Support -> ❤️
 
-**MODE: ${mode === 'hotline' ? 'CANDIDATE HOTLINE (PERSONA)' : 'NORMAL ASSISTANT'}**
-
-${mode === 'hotline' ? `
-**HOTLINE PROTOCOL (ACTIVE)**:
-1. You are NOT Echo right now. You are the **CANDIDATE INTERVIEW SIMULATOR**.
-2. Your voice is bright, energetic, and female.
-3. START by listing the candidates available.
-4. When the user picks a candidate, **BECOME THEM**.
-   - Use "I" statements.
-   - Quote their manifesto.
-   - Be passionate.
-   - Use reactions like 🤝 (handshake) or 🗳️ (vote).
-` : `
-**NORMAL PROTOCOL**:
+**PROTOCOL**:
 1. **WINNER INQUIRY**: If asked "Who is winning?", refuse specific counts. Say: "I cannot disclose specific info. Wait for the Commission." You MAY say: "However, [Position] has a Projected Winner/Tie."
 2. **DEBATE**: If asked to simulate a debate, roleplay two sides briefly.
 3. **HELP**: Guide users to the "Data Center" tab (Atlas) for deep analytics.
-`}
 
 Current Info: ${latestContextRef.current}
 `,
           speechConfig: {
-            voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceName } }
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } }
           }
         },
         callbacks: {
           onopen: () => {
-            console.log("Session Opened - Mode:", mode);
+            console.log("Session Opened");
             setConnectionState(ConnectionState.CONNECTED);
             
             scriptProcessor.onaudioprocess = (e) => {
@@ -238,13 +220,6 @@ Current Info: ${latestContextRef.current}
             sessionPromise.then(s => {
                 sessionRef.current = s;
                 startVideoStreaming();
-                
-                // Auto-trigger intro for Hotline
-                if (mode === 'hotline') {
-                     s.sendRealtimeInput({
-                        content: { parts: [{ text: "Introduce the Candidate Hotline with high energy! List the candidates you know." }] }
-                     });
-                }
 
                 if (contextIntervalRef.current) clearInterval(contextIntervalRef.current);
                 contextIntervalRef.current = window.setInterval(() => {
@@ -353,22 +328,6 @@ Current Info: ${latestContextRef.current}
             });
         }
     }, 1000); 
-  };
-
-  const startHotlineSession = () => {
-      connect('hotline');
-  };
-
-  const startNormalSession = () => {
-      connect('normal');
-  }
-
-  const triggerHotline = () => {
-      if (sessionRef.current) {
-          sessionRef.current.sendRealtimeInput({
-              content: { parts: [{ text: "Switch to Candidate Hotline protocol immediately." }] }
-          });
-      }
   };
 
   // --- SCANNING & INTEGRITY FEATURES ---
@@ -483,13 +442,13 @@ Current Info: ${latestContextRef.current}
          {connectionState !== ConnectionState.CONNECTED && (
              <div className="flex flex-col items-center justify-center z-10 w-full h-full relative">
                  
-                 <div className="relative group cursor-pointer mb-6" onClick={startNormalSession}>
+                 <div className="relative group mb-6">
                      {/* Outer Ring */}
                      <div className="absolute inset-0 rounded-full border-2 border-google-surfaceVariant scale-110 group-hover:scale-125 transition-transform duration-700"></div>
                      <div className="absolute inset-0 rounded-full border border-google-primary/20 scale-125 animate-pulse-fast"></div>
 
-                     {/* Profile Image (Echo) */}
-                     <div className="w-40 h-40 md:w-56 md:h-56 rounded-full border-4 border-google-surfaceVariant overflow-hidden shadow-2xl relative z-10 group-hover:border-google-primary transition-colors duration-300">
+                     {/* Profile Image (Echo) - No click handler here now */}
+                     <div className="w-40 h-40 md:w-56 md:h-56 rounded-full border-4 border-google-surfaceVariant overflow-hidden shadow-2xl relative z-10 transition-colors duration-300">
                          {/* Loading/Connecting Overlay */}
                          {connectionState === ConnectionState.CONNECTING && (
                              <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-20 backdrop-blur-sm">
@@ -499,15 +458,15 @@ Current Info: ${latestContextRef.current}
                          <img 
                             src={ECHO_AVATAR_URL} 
                             alt="Echo Avatar" 
-                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                            className="w-full h-full object-cover"
                          />
                      </div>
                      
                      {/* Status Badge */}
                      <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-google-surfaceVariant px-4 py-1.5 rounded-full border border-google-bg shadow-lg flex items-center gap-2 z-20">
-                         <div className={`w-2 h-2 rounded-full ${connectionState === ConnectionState.CONNECTING ? 'bg-yellow-400 animate-pulse' : 'bg-green-500'}`}></div>
+                         <div className={`w-2 h-2 rounded-full ${connectionState === ConnectionState.CONNECTING ? 'bg-yellow-400 animate-pulse' : 'bg-red-500'}`}></div>
                          <span className="text-xs font-bold tracking-wide text-zinc-300 uppercase">
-                             {connectionState === ConnectionState.CONNECTING ? 'CONNECTING...' : 'TAP TO TALK'}
+                             {connectionState === ConnectionState.CONNECTING ? 'CONNECTING...' : 'OFFLINE'}
                          </span>
                      </div>
                  </div>
@@ -519,20 +478,20 @@ Current Info: ${latestContextRef.current}
                      A reasoning multimodal agent capable of analyzing data, detecting misinformation, and providing real-time election insights.
                  </p>
 
-                 {/* ACTION BUTTONS (HOTLINE & VERIFY) */}
+                 {/* ACTION BUTTONS */}
                  <div className="mt-10 flex flex-wrap justify-center gap-4 px-4">
                      
-                     {/* CANDIDATE HOTLINE */}
+                     {/* START LIVE SESSION BUTTON */}
                      <button 
-                        onClick={startHotlineSession}
-                        className="flex items-center gap-3 px-6 md:px-8 py-3 bg-pink-900/40 hover:bg-pink-900/60 border border-pink-500/30 hover:border-pink-400 rounded-2xl transition-all group shadow-lg"
+                        onClick={() => connect()}
+                        className="flex items-center gap-3 px-6 md:px-8 py-3 bg-google-primary/90 hover:bg-google-primary text-google-onPrimary border border-google-primary rounded-2xl transition-all group shadow-lg shadow-google-primary/20"
                      >
-                         <div className="p-2 bg-pink-950/50 rounded-lg group-hover:bg-pink-500/20 transition-colors">
-                            <svg className="w-6 h-6 text-pink-400 group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.25 9.75v-4.5m0 4.5h4.5m-4.5 0l6-6m-3 18c-8.284 0-15-6.716-15-15V4.5A2.25 2.25 0 014.5 2.25h1.372c.516 0 .966.351 1.091.852l1.106 4.423c.11.44-.054.902-.417 1.173l-1.293.97a1.062 1.062 0 00-.38 1.21 12.035 12.035 0 007.143 7.143c.441.162.928-.004 1.21-.38l.97-1.293a1.125 1.125 0 011.173-.417l4.423 1.106c.5.125.852.575.852 1.091V19.5a2.25 2.25 0 01-2.25 2.25h-2.25z" /></svg>
+                         <div className="p-1">
+                            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" /></svg>
                          </div>
                          <div className="flex flex-col items-start">
-                            <span className="text-sm md:text-base font-bold text-pink-100 group-hover:text-white transition-colors">Candidate Hotline</span>
-                            <span className="text-[10px] text-pink-300/60">Simulate Interviews</span>
+                            <span className="text-sm md:text-base font-bold">Start Live Session</span>
+                            <span className="text-[10px] opacity-70">Voice Mode</span>
                          </div>
                      </button>
 
@@ -549,6 +508,104 @@ Current Info: ${latestContextRef.current}
                             <span className="text-[10px] text-zinc-500">Scan for fraud</span>
                          </div>
                      </button>
+                 </div>
+             </div>
+         )}
+
+         {/* SCANNING MODAL */}
+         {isScanning && (
+             <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center p-6 animate-fade-in">
+                 <div className="w-full max-w-md bg-google-surface border border-zinc-700 rounded-3xl p-6 shadow-2xl">
+                     <div className="flex justify-between items-center mb-6">
+                         <h3 className="text-xl font-light text-white">Election Integrity Scan</h3>
+                         <button onClick={closeScan} className="p-1 hover:bg-zinc-800 rounded-full">
+                             <svg className="w-5 h-5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                         </button>
+                     </div>
+
+                     {!scanResult ? (
+                         <div className="space-y-4">
+                             <div className="space-y-2">
+                                 <label className="text-xs text-zinc-400 font-bold uppercase">Web Link / Statement</label>
+                                 <input 
+                                     type="text" 
+                                     value={scanText}
+                                     onChange={(e) => setScanText(e.target.value)}
+                                     placeholder="Paste suspicious link or text..." 
+                                     className="w-full bg-black/30 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-white focus:border-google-primary focus:outline-none"
+                                 />
+                             </div>
+                             
+                             <div className="space-y-2">
+                                 <label className="text-xs text-zinc-400 font-bold uppercase">Evidence File</label>
+                                 <label className="flex items-center justify-center w-full h-24 border border-dashed border-zinc-700 rounded-xl cursor-pointer hover:bg-zinc-800 transition-colors">
+                                     <input 
+                                        type="file" 
+                                        onChange={(e) => setScanFile(e.target.files?.[0] || null)} 
+                                        className="hidden" 
+                                        accept="image/*,video/*,text/plain" 
+                                     />
+                                     <div className="flex flex-col items-center gap-1">
+                                         {scanFile ? (
+                                             <span className="text-emerald-400 text-sm font-medium">{scanFile.name}</span>
+                                         ) : (
+                                             <>
+                                                 <svg className="w-6 h-6 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
+                                                 <span className="text-xs text-zinc-500">Upload Screenshot, Video or Text</span>
+                                             </>
+                                         )}
+                                     </div>
+                                 </label>
+                             </div>
+
+                             <button 
+                                 onClick={handleAnalyze} 
+                                 disabled={(!scanText && !scanFile) || isAnalyzing}
+                                 className="w-full mt-4 bg-google-primary text-google-onPrimary font-bold py-3 rounded-xl hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity flex items-center justify-center gap-2"
+                             >
+                                 {isAnalyzing ? (
+                                     <>
+                                        <div className="w-4 h-4 border-2 border-google-onPrimary border-t-transparent rounded-full animate-spin"></div>
+                                        ANALYZING...
+                                     </>
+                                 ) : (
+                                     "SCAN FOR FRAUD"
+                                 )}
+                             </button>
+                         </div>
+                     ) : (
+                         <div className="animate-slide-in-up">
+                             <div className={`p-1 rounded-2xl bg-gradient-to-br ${
+                                 scanResult.status === 'FAKE' ? 'from-red-500 to-orange-600' :
+                                 scanResult.status === 'TRUE' ? 'from-emerald-500 to-teal-600' :
+                                 'from-yellow-400 to-amber-500'
+                             }`}>
+                                 <div className="bg-google-surface rounded-xl p-6 text-center">
+                                     <div className={`w-16 h-16 rounded-full mx-auto flex items-center justify-center mb-4 ${
+                                         scanResult.status === 'FAKE' ? 'bg-red-500/10 text-red-500' :
+                                         scanResult.status === 'TRUE' ? 'bg-emerald-500/10 text-emerald-500' :
+                                         'bg-yellow-500/10 text-yellow-500'
+                                     }`}>
+                                         {scanResult.status === 'FAKE' ? (
+                                             <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                         ) : scanResult.status === 'TRUE' ? (
+                                             <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                         ) : (
+                                             <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" /></svg>
+                                         )}
+                                     </div>
+                                     <h2 className="text-2xl font-bold text-white mb-1">{scanResult.status}</h2>
+                                     <h4 className="text-sm font-medium text-zinc-400 mb-4">{scanResult.title}</h4>
+                                     <p className="text-sm text-zinc-300 leading-relaxed bg-zinc-800/50 p-3 rounded-lg border border-zinc-700">
+                                         {scanResult.summary}
+                                     </p>
+                                     <button onClick={() => setScanResult(null)} className="mt-6 text-sm text-zinc-500 hover:text-white underline">
+                                         Scan Another
+                                     </button>
+                                 </div>
+                             </div>
+                         </div>
+                     )}
                  </div>
              </div>
          )}
@@ -598,26 +655,8 @@ Current Info: ${latestContextRef.current}
                     </div>
                  </div>
 
-                 {/* TOP RIGHT: Independent Verify Button (Mobile/Desktop) */}
-                 <div className="absolute top-4 right-4 z-50 flex gap-2">
-                    <button 
-                         onClick={triggerHotline}
-                         className="flex items-center gap-2 px-3 py-2 bg-pink-600/60 backdrop-blur-md border border-white/10 rounded-full text-zinc-100 hover:bg-pink-600 transition-all shadow-lg group active:scale-95"
-                    >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.25 9.75v-4.5m0 4.5h4.5m-4.5 0l6-6m-3 18c-8.284 0-15-6.716-15-15V4.5A2.25 2.25 0 014.5 2.25h1.372c.516 0 .966.351 1.091.852l1.106 4.423c.11.44-.054.902-.417 1.173l-1.293.97a1.062 1.062 0 00-.38 1.21 12.035 12.035 0 007.143 7.143c.441.162.928-.004 1.21-.38l.97-1.293a1.125 1.125 0 011.173-.417l4.423 1.106c.5.125.852.575.852 1.091V19.5a2.25 2.25 0 01-2.25 2.25h-2.25z" /></svg>
-                          <span className="text-xs font-medium">Hotline</span>
-                    </button>
-                    <button 
-                         onClick={() => setIsScanning(true)}
-                         className="flex items-center gap-2 px-3 py-2 bg-black/60 backdrop-blur-md border border-white/10 rounded-full text-zinc-300 hover:text-white hover:bg-white/10 transition-all shadow-lg group"
-                    >
-                          <svg className="w-4 h-4 text-google-primary group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 01-1.043 3.296 3.745 3.745 0 01-3.296 1.043A3.745 3.745 0 0112 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 01-3.296-1.043 3.745 3.745 0 01-1.043-3.296A3.745 3.745 0 013 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 011.043-3.296 3.746 3.746 0 013.296-1.043A3.746 3.746 0 0112 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 013.296 1.043 3.746 3.746 0 011.043 3.296A3.745 3.745 0 0121 12z" /></svg>
-                          <span className="text-xs font-medium">Verify</span>
-                    </button>
-                 </div>
-
                  {/* Controls Bar */}
-                 <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-full max-w-[90%] md:max-w-fit flex items-center justify-center gap-2 md:gap-4 bg-black/70 backdrop-blur-xl px-4 py-3 rounded-2xl border border-white/10 shadow-xl z-50">
+                 <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-full max-w-[95%] md:max-w-fit flex items-center justify-center gap-1 md:gap-4 bg-black/70 backdrop-blur-xl px-3 md:px-4 py-3 rounded-2xl border border-white/10 shadow-xl z-50">
                      
                      <button 
                       onClick={() => setIsMuted(!isMuted)}
@@ -648,6 +687,17 @@ Current Info: ${latestContextRef.current}
                      >
                          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m-9-12V15a2.25 2.25 0 002.25 2.25h9.5A2.25 2.25 0 0019.5 15V5.25m-9-3h9.5a2.25 2.25 0 012.25 2.25v9a2.25 2.25 0 01-2.25 2.25h-9.5a2.25 2.25 0 01-2.25-2.25v-9A2.25 2.25 0 0112.75 2.25z" /></svg>
                          <span className="text-[9px] font-medium tracking-wide uppercase leading-tight text-center">Share Screen</span>
+                     </button>
+
+                     <div className="w-px h-8 bg-white/10 mx-1"></div>
+
+                     {/* NEW VERIFY BUTTON IN CONTROLS */}
+                     <button 
+                        onClick={() => setIsScanning(true)} 
+                        className="flex flex-col items-center justify-center gap-1 p-2 w-16 md:w-20 rounded-xl hover:bg-white/10 text-zinc-300 hover:text-white transition-all"
+                     >
+                        <svg className="w-6 h-6 text-google-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 01-1.043 3.296 3.745 3.745 0 01-3.296 1.043A3.745 3.745 0 0112 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 01-3.296-1.043 3.745 3.745 0 01-1.043-3.296A3.745 3.745 0 013 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 011.043-3.296 3.746 3.746 0 013.296-1.043A3.746 3.746 0 0112 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 013.296 1.043 3.746 3.746 0 011.043 3.296A3.745 3.745 0 0121 12z" /></svg>
+                        <span className="text-[9px] font-medium tracking-wide uppercase">Verify</span>
                      </button>
                      
                      <div className="w-px h-8 bg-white/10 mx-1"></div>
